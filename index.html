@@ -237,6 +237,25 @@
       font-weight: 600;
     }
 
+    .count-badge {
+      display: inline-block;
+      min-width: 20px;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 99px;
+      background: var(--chip);
+      color: var(--text-faint);
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.5;
+      transition: background .2s ease, color .2s ease;
+    }
+
+    .filter-btn.active .count-badge {
+      background: var(--accent);
+      color: #fff;
+    }
+
     #todoList { list-style: none; }
 
     .todo-item {
@@ -258,6 +277,26 @@
 
     .todo-item:hover { background: var(--chip); }
     .todo-item:last-child { border-bottom: none; }
+
+    .todo-item.removing {
+      opacity: 0;
+      transform: translateX(24px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .edit-input {
+      flex: 1;
+      min-width: 0;
+      padding: 8px 12px;
+      background: var(--field);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      font: inherit;
+      font-size: 15px;
+      color: var(--text);
+      outline: none;
+    }
 
     .check {
       position: relative;
@@ -453,13 +492,13 @@
 
     <div class="filters">
       <button class="filter-btn active" onclick="setFilter('all', this)">
-        All
+        All <span class="count-badge" id="countAll">0</span>
       </button>
       <button class="filter-btn" onclick="setFilter('active', this)">
-        Active
+        Active <span class="count-badge" id="countActive">0</span>
       </button>
       <button class="filter-btn" onclick="setFilter('completed', this)">
-        Completed
+        Completed <span class="count-badge" id="countCompleted">0</span>
       </button>
     </div>
 
@@ -540,11 +579,69 @@
       renderTodos();
     }
 
-    function deleteTodo(id) {
+    function removeTodo(id) {
       todos = todos.filter(todo => todo.id !== id);
 
       saveTodos();
       renderTodos();
+    }
+
+    function deleteTodo(id, button) {
+      const row = button && button.closest(".todo-item");
+      const reduceMotion =
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (!row || reduceMotion) {
+        removeTodo(id);
+        return;
+      }
+
+      row.classList.add("removing");
+      setTimeout(() => removeTodo(id), 200);
+    }
+
+    function startEdit(id, span) {
+      const todo = todos.find(item => item.id === id);
+
+      if (!todo || todo.completed) return;
+
+      const field = document.createElement("input");
+      field.type = "text";
+      field.className = "edit-input";
+      field.value = todo.text;
+
+      span.replaceWith(field);
+      field.focus();
+      field.setSelectionRange(field.value.length, field.value.length);
+
+      let settled = false;
+
+      function commit() {
+        if (settled) return;
+        settled = true;
+
+        const text = field.value.trim();
+
+        if (text) {
+          todo.text = text;
+          saveTodos();
+        }
+
+        renderTodos();
+      }
+
+      field.addEventListener("blur", commit);
+
+      field.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          commit();
+        }
+
+        if (event.key === "Escape") {
+          settled = true;
+          renderTodos();
+        }
+      });
     }
 
     function clearCompleted() {
@@ -620,11 +717,15 @@
               </span>
             </label>
 
-            <span class="todo-text">${escapeHTML(todo.text)}</span>
+            <span
+              class="todo-text"
+              ondblclick="startEdit(${todo.id}, this)"
+              title="Double-click to edit"
+            >${escapeHTML(todo.text)}</span>
 
             <button
               class="delete-btn"
-              onclick="deleteTodo(${todo.id})"
+              onclick="deleteTodo(${todo.id}, this)"
               aria-label="Delete task"
               title="Delete"
             >
@@ -642,6 +743,10 @@
 
       const activeCount = todos.filter(todo => !todo.completed).length;
       const doneCount = todos.length - activeCount;
+
+      document.getElementById("countAll").textContent = todos.length;
+      document.getElementById("countActive").textContent = activeCount;
+      document.getElementById("countCompleted").textContent = doneCount;
 
       count.textContent =
         activeCount === 1
